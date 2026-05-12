@@ -4,6 +4,7 @@
   "description": "Enterprise WhatsApp webhook ingestion service with Fastify, Kafka, and Prisma",
   "main": "dist/server.js",
   "scripts": {
+    "postinstall": "prisma generate",
     "dev": "tsx watch src/server.ts",
     "build": "tsup src/server.ts --format cjs --dts --clean",
     "start": "node dist/server.js",
@@ -23,7 +24,7 @@
     "pm2:logs": "pm2 logs chatterdesk",
     "pm2:monit": "pm2 monit",
     "pm2:save": "pm2 save",
-    "deploy": "npm run build && npm run pm2:reload"
+    "deploy": "npm run prisma:generate && npm run build && npm run pm2:reload"
   },
   "dependencies": {
     "@fastify/cors": "^9.0.1",

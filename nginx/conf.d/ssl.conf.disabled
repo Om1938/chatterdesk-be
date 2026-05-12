@@ -1,0 +1,46 @@
+# HTTPS — enabled by init-ssl.sh after the first certificate is issued.
+# init-ssl.sh renames this to ssl.conf then reloads Nginx.
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name chatter.ompdas.com;
+
+    # Certificates managed by Certbot
+    ssl_certificate     /etc/letsencrypt/live/chatter.ompdas.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/chatter.ompdas.com/privkey.pem;
+    ssl_trusted_certificate /etc/letsencrypt/live/chatter.ompdas.com/chain.pem;
+
+    # Modern TLS settings
+    ssl_protocols             TLSv1.2 TLSv1.3;
+    ssl_ciphers               ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305:DHE-RSA-AES128-GCM-SHA256;
+    ssl_prefer_server_ciphers off;
+    ssl_session_cache         shared:SSL:10m;
+    ssl_session_timeout       1d;
+    ssl_session_tickets       off;
+    ssl_stapling              on;
+    ssl_stapling_verify       on;
+
+    # HSTS (1 year)
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+
+    # Proxy to Node.js app on host (running via PM2)
+    location / {
+        proxy_pass         http://host.docker.internal:3000;
+        proxy_http_version 1.1;
+        proxy_set_header   Host              $host;
+        proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_set_header   Connection        '';
+        proxy_read_timeout 30s;
+        proxy_send_timeout 30s;
+
+        # Webhook payloads can be large
+        client_max_body_size 5m;
+    }
+
+    # Let's Encrypt renewal still needs HTTP-01 challenge on 443 too
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+}
