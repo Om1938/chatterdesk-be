@@ -16,12 +16,15 @@ import {
 
 export interface RawWebhookEvent {
   eventId: string
+  tenantId: string
+  phoneNumberId: string
   receivedAt: string
   payload: WhatsAppWebhookPayload
 }
 
 export interface InboundMessageEvent {
   eventId: string
+  tenantId: string
   phoneNumberId: string
   waId: string
   profileName: string | null
@@ -30,6 +33,7 @@ export interface InboundMessageEvent {
 
 export interface StatusUpdateEvent {
   eventId: string
+  tenantId: string
   phoneNumberId: string
   status: WhatsAppStatus
 }
@@ -38,16 +42,13 @@ export class WebhookService {
   constructor(private readonly fastify: FastifyInstance) {}
 
   verifySignature(rawBody: Buffer, signature: string | undefined): void {
-    if (!signature) {
-      throw new WebhookSignatureError()
-    }
+    if (!signature) throw new WebhookSignatureError()
 
     const expected = `sha256=${crypto
       .createHmac('sha256', config.WHATSAPP_APP_SECRET)
       .update(rawBody)
       .digest('hex')}`
 
-    // Constant-time comparison to prevent timing attacks
     const sigBuffer = Buffer.from(signature)
     const expBuffer = Buffer.from(expected)
 
@@ -61,13 +62,11 @@ export class WebhookService {
 
   parseAndValidate(body: unknown): WhatsAppWebhookPayload {
     const result = WhatsAppWebhookPayloadSchema.safeParse(body)
-
     if (!result.success) {
       throw new WebhookValidationError(
         `Invalid webhook payload: ${result.error.issues.map((i) => i.message).join(', ')}`,
       )
     }
-
     return result.data
   }
 
@@ -78,67 +77,90 @@ export class WebhookService {
     const eventId = crypto.randomUUID()
     const receivedAt = new Date()
 
-    // 1. Persist raw event to DB for auditability
-    await this.fastify.prisma.webhookEvent.create({
-      data: {
-        id: eventId,
-        source: 'whatsapp',
-        topic: KafkaTopics.WHATSAPP_WEBHOOK_RAW,
-        rawPayload: rawBody,
-        receivedAt,
-      },
-    })
-
-    // 2. Publish raw event to Kafka for fan-out
-    const rawEvent: RawWebhookEvent = {
-      eventId,
-      receivedAt: receivedAt.toISOString(),
-      payload,
-    }
-
-    await this.fastify.kafka.publish(KafkaTopics.WHATSAPP_WEBHOOK_RAW, rawEvent, {
-      key: eventId,
-      headers: { 'x-event-type': 'whatsapp.webhook.raw' },
-    })
-
-    // 3. Extract and fan-out messages + statuses
     for (const entry of payload.entry) {
       for (const change of entry.changes) {
-        const { value } = change
+        const phoneNumberId = change.value.metadata.phone_number_id
 
-        if (value.messages?.length) {
-          await this.publishMessages(eventId, value)
+        // Resolve tenant from the WA phone number
+        const waAccount = await this.fastify.prisma.whatsAppAccount.findUnique({
+          where: { phoneNumberId, isActive: true },
+          select: { tenantId: true },
+        })
+
+        if (!waAccount) {
+          logger.warn({ phoneNumberId }, 'No active WA account found for phone_number_id — skipping')
+          continue
         }
 
-        if (value.statuses?.length) {
-          await this.publishStatuses(eventId, value)
+        const { tenantId } = waAccount
+
+        // Persist raw event
+        await this.fastify.prisma.webhookEvent.create({
+          data: {
+            id: eventId,
+            tenantId,
+            source: 'whatsapp',
+            topic: KafkaTopics.WHATSAPP_WEBHOOK_RAW,
+            rawPayload: rawBody,
+            receivedAt,
+          },
+        })
+
+        // Publish enriched raw event
+        const rawEvent: RawWebhookEvent = {
+          eventId,
+          tenantId,
+          phoneNumberId,
+          receivedAt: receivedAt.toISOString(),
+          payload,
+        }
+
+        await this.fastify.kafka.publish(
+          KafkaTopics.WHATSAPP_WEBHOOK_RAW,
+          rawEvent,
+          { key: tenantId, headers: { 'x-event-type': 'whatsapp.webhook.raw' } },
+        )
+
+        // Fan-out messages
+        if (change.value.messages?.length) {
+          await this.publishMessages(eventId, tenantId, phoneNumberId, change.value)
+        }
+
+        // Fan-out status updates
+        if (change.value.statuses?.length) {
+          await this.publishStatuses(eventId, tenantId, phoneNumberId, change.value)
         }
       }
     }
 
     logger.info({ eventId }, 'Webhook event processed and published')
-
     return eventId
   }
 
   private async publishMessages(
     eventId: string,
+    tenantId: string,
+    phoneNumberId: string,
     value: WhatsAppWebhookPayload['entry'][number]['changes'][number]['value'],
   ): Promise<void> {
-    const { messages = [], contacts = [], metadata } = value
+    const { messages = [], contacts = [] } = value
 
     const batch = messages.map((message) => {
       const contact = contacts.find((c) => c.wa_id === message.from)
       const event: InboundMessageEvent = {
         eventId,
-        phoneNumberId: metadata.phone_number_id,
+        tenantId,
+        phoneNumberId,
         waId: message.from,
         profileName: contact?.profile.name ?? null,
         message,
       }
       return {
         payload: event,
-        options: { key: message.from, headers: { 'x-event-type': 'whatsapp.message.inbound' } },
+        options: {
+          key: `${tenantId}:${message.from}`,
+          headers: { 'x-event-type': 'whatsapp.message.inbound', 'x-tenant-id': tenantId },
+        },
       }
     })
 
@@ -147,21 +169,24 @@ export class WebhookService {
 
   private async publishStatuses(
     eventId: string,
+    tenantId: string,
+    phoneNumberId: string,
     value: WhatsAppWebhookPayload['entry'][number]['changes'][number]['value'],
   ): Promise<void> {
-    const { statuses = [], metadata } = value
+    const { statuses = [] } = value
 
     const batch = statuses.map((status) => {
       const event: StatusUpdateEvent = {
         eventId,
-        phoneNumberId: metadata.phone_number_id,
+        tenantId,
+        phoneNumberId,
         status,
       }
       return {
         payload: event,
         options: {
-          key: status.recipient_id,
-          headers: { 'x-event-type': 'whatsapp.status.update' },
+          key: `${tenantId}:${status.recipient_id}`,
+          headers: { 'x-event-type': 'whatsapp.status.update', 'x-tenant-id': tenantId },
         },
       }
     })

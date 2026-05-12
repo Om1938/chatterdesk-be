@@ -11,6 +11,12 @@ const envSchema = z.object({
 
   DATABASE_URL: z.string().url(),
 
+  // JWT
+  JWT_SECRET: z.string().min(32),
+  JWT_ACCESS_TTL: z.string().default('15m'),
+  JWT_REFRESH_TTL_DAYS: z.coerce.number().int().positive().default(7),
+
+  // Kafka
   KAFKA_BROKERS: z
     .string()
     .transform((v) => v.split(',').map((b) => b.trim())),
@@ -23,16 +29,26 @@ const envSchema = z.object({
   KAFKA_SASL_MECHANISM: z
     .string()
     .optional()
-    .transform((v) => (v === '' ? undefined : v) as 'plain' | 'scram-sha-256' | 'scram-sha-512' | undefined),
+    .transform(
+      (v) =>
+        (v === '' ? undefined : v) as
+          | 'plain'
+          | 'scram-sha-256'
+          | 'scram-sha-512'
+          | undefined,
+    ),
   KAFKA_SASL_USERNAME: z.string().optional(),
   KAFKA_SASL_PASSWORD: z.string().optional(),
 
+  // WhatsApp (platform-level — used for the shared webhook endpoint)
   WHATSAPP_VERIFY_TOKEN: z.string().min(1),
   WHATSAPP_APP_SECRET: z.string().min(1),
 
-  WEBHOOK_SIGNATURE_HEADER: z
-    .string()
-    .default('x-hub-signature-256'),
+  // WhatsApp Cloud API
+  WA_GRAPH_API_BASE: z.string().url().default('https://graph.facebook.com'),
+  WA_GRAPH_API_VERSION: z.string().default('v21.0'),
+
+  WEBHOOK_SIGNATURE_HEADER: z.string().default('x-hub-signature-256'),
   RATE_LIMIT_MAX: z.coerce.number().int().positive().default(100),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60_000),
 })

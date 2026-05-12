@@ -6,67 +6,191 @@ datasource db {
   provider = "postgresql"
 }
 
-model WebhookEvent {
-  id             String    @id @default(uuid())
-  source         String    @db.VarChar(64)
-  topic          String    @db.VarChar(128)
-  rawPayload     String    @db.Text
-  processingError String?  @db.Text
-  receivedAt     DateTime  @default(now())
-  processedAt    DateTime?
-  createdAt      DateTime  @default(now())
+// ── Tenancy ───────────────────────────────────────────────────────────────────
 
-  @@index([source, receivedAt(sort: Desc)])
-  @@index([topic, receivedAt(sort: Desc)])
-  @@index([processedAt])
-  @@map("webhook_events")
+model Tenant {
+  id        String   @id @default(uuid())
+  name      String   @db.VarChar(256)
+  slug      String   @unique @db.VarChar(64)
+  plan      Plan     @default(FREE)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users         User[]
+  waAccounts    WhatsAppAccount[]
+  contacts      WaContact[]
+  conversations Conversation[]
+  webhookEvents WebhookEvent[]
+
+  @@map("tenants")
 }
 
-model WhatsAppContact {
-  id          String    @id @default(uuid())
-  waId        String    @unique @db.VarChar(32)
-  profileName String?   @db.VarChar(256)
-  phoneNumber String?   @db.VarChar(32)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  messages    WhatsAppMessage[]
+// ── Users & Sessions ──────────────────────────────────────────────────────────
 
-  @@index([waId])
-  @@map("whatsapp_contacts")
+model User {
+  id           String   @id @default(uuid())
+  tenantId     String
+  email        String   @db.VarChar(256)
+  passwordHash String   @db.VarChar(256)
+  name         String   @db.VarChar(256)
+  role         UserRole @default(AGENT)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant       Tenant                   @relation(fields: [tenantId], references: [id])
+  sessions     Session[]
+  assignments  ConversationAssignment[]
+  sentMessages Message[]
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@map("users")
 }
 
-model WhatsAppMessage {
+model Session {
+  id               String   @id @default(uuid())
+  userId           String
+  refreshTokenHash String   @unique @db.VarChar(256)
+  expiresAt        DateTime
+  createdAt        DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+// ── WhatsApp Accounts ─────────────────────────────────────────────────────────
+
+model WhatsAppAccount {
   id            String   @id @default(uuid())
-  waMessageId   String   @unique @db.VarChar(128)
-  waId          String   @db.VarChar(32)
-  direction     Direction
-  messageType   String   @db.VarChar(32)
-  content       Json
-  timestamp     DateTime
-  status        MessageStatus @default(RECEIVED)
+  tenantId      String
+  phoneNumberId String   @unique @db.VarChar(64)
+  displayPhone  String   @db.VarChar(32)
+  wabaId        String   @db.VarChar(64)
+  accessToken   String   @db.Text
+  verifyToken   String   @db.VarChar(256)
+  appSecret     String   @db.VarChar(256)
+  isActive      Boolean  @default(true)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  contact       WhatsAppContact? @relation(fields: [waId], references: [waId])
+  tenant        Tenant         @relation(fields: [tenantId], references: [id])
+  conversations Conversation[]
 
-  @@index([waId, timestamp(sort: Desc)])
-  @@index([status])
-  @@map("whatsapp_messages")
+  @@index([tenantId])
+  @@map("whatsapp_accounts")
 }
 
-model WhatsAppStatusUpdate {
-  id            String   @id @default(uuid())
-  waMessageId   String   @db.VarChar(128)
-  recipientId   String   @db.VarChar(32)
-  status        String   @db.VarChar(32)
-  timestamp     DateTime
-  errorCode     Int?
-  errorTitle    String?  @db.VarChar(256)
-  createdAt     DateTime @default(now())
+// ── Inbox ─────────────────────────────────────────────────────────────────────
 
-  @@index([waMessageId])
-  @@index([recipientId, timestamp(sort: Desc)])
-  @@map("whatsapp_status_updates")
+model WaContact {
+  id        String   @id @default(uuid())
+  tenantId  String
+  waId      String   @db.VarChar(32)
+  name      String?  @db.VarChar(256)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id])
+  conversations Conversation[]
+
+  @@unique([tenantId, waId])
+  @@index([tenantId])
+  @@map("wa_contacts")
+}
+
+model Conversation {
+  id            String             @id @default(uuid())
+  tenantId      String
+  waAccountId   String
+  contactId     String
+  status        ConversationStatus @default(OPEN)
+  lastMessageAt DateTime?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  tenant      Tenant                   @relation(fields: [tenantId], references: [id])
+  waAccount   WhatsAppAccount          @relation(fields: [waAccountId], references: [id])
+  contact     WaContact                @relation(fields: [contactId], references: [id])
+  messages    Message[]
+  assignments ConversationAssignment[]
+
+  @@unique([waAccountId, contactId])
+  @@index([tenantId, status])
+  @@index([tenantId, lastMessageAt(sort: Desc)])
+  @@map("conversations")
+}
+
+model Message {
+  id             String        @id @default(uuid())
+  conversationId String
+  waMessageId    String?       @unique @db.VarChar(128)
+  direction      Direction
+  type           String        @db.VarChar(32)
+  content        Json
+  status         MessageStatus @default(RECEIVED)
+  sentAt         DateTime
+  createdAt      DateTime      @default(now())
+  sentByUserId   String?
+
+  conversation Conversation @relation(fields: [conversationId], references: [id])
+  sentBy       User?        @relation(fields: [sentByUserId], references: [id])
+
+  @@index([conversationId, sentAt(sort: Desc)])
+  @@map("messages")
+}
+
+model ConversationAssignment {
+  id             String   @id @default(uuid())
+  conversationId String
+  userId         String
+  assignedAt     DateTime @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id])
+  user         User         @relation(fields: [userId], references: [id])
+
+  @@unique([conversationId, userId])
+  @@map("conversation_assignments")
+}
+
+// ── Audit ─────────────────────────────────────────────────────────────────────
+
+model WebhookEvent {
+  id              String    @id @default(uuid())
+  tenantId        String?
+  source          String    @db.VarChar(64)
+  topic           String    @db.VarChar(128)
+  rawPayload      String    @db.Text
+  processingError String?   @db.Text
+  receivedAt      DateTime  @default(now())
+  processedAt     DateTime?
+  createdAt       DateTime  @default(now())
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId, receivedAt(sort: Desc)])
+  @@index([source, receivedAt(sort: Desc)])
+  @@index([topic, receivedAt(sort: Desc)])
+  @@map("webhook_events")
+}
+
+// ── Enums ─────────────────────────────────────────────────────────────────────
+
+enum Plan {
+  FREE
+  STARTER
+  PROFESSIONAL
+  ENTERPRISE
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  AGENT
+  VIEWER
 }
 
 enum Direction {
@@ -81,4 +205,11 @@ enum MessageStatus {
   DELIVERED
   READ
   FAILED
+}
+
+enum ConversationStatus {
+  OPEN
+  ASSIGNED
+  RESOLVED
+  CLOSED
 }

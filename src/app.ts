@@ -6,17 +6,18 @@ import { config } from './config/index.js'
 import { logger } from './utils/logger.js'
 
 import sensiblePlugin from './plugins/sensible.js'
+import cookiePlugin from './plugins/cookie.js'
+import jwtPlugin from './plugins/jwt.js'
 import prismaPlugin from './plugins/prisma.js'
 import kafkaPlugin from './plugins/kafka.js'
 
 import { healthRoutes } from './modules/health/health.routes.js'
 import { webhookRoutes } from './modules/webhook/webhook.routes.js'
+import { authRoutes } from './modules/auth/auth.routes.js'
+import { conversationRoutes } from './modules/conversations/conversation.routes.js'
 
 export async function buildApp() {
-  const app = Fastify({
-    logger,
-    trustProxy: true,
-  })
+  const app = Fastify({ logger, trustProxy: true })
 
   // Capture raw body buffer for HMAC signature verification
   app.addContentTypeParser(
@@ -34,13 +35,12 @@ export async function buildApp() {
   )
 
   // ── Security ─────────────────────────────────────────────────────────────────
-  await app.register(helmet, {
-    contentSecurityPolicy: false,
-  })
+  await app.register(helmet, { contentSecurityPolicy: false })
 
   await app.register(cors, {
     origin: config.NODE_ENV === 'production' ? false : true,
-    methods: ['GET', 'POST'],
+    methods: ['GET', 'POST', 'PATCH', 'DELETE'],
+    credentials: true,
   })
 
   await app.register(rateLimit, {
@@ -53,14 +53,19 @@ export async function buildApp() {
     },
   })
 
-  // ── Plugins ───────────────────────────────────────────────────────────────────
+  // ── Plugins (order matters: cookie → jwt → prisma → kafka) ───────────────────
   await app.register(sensiblePlugin)
+  await app.register(cookiePlugin)
+  await app.register(jwtPlugin)
   await app.register(prismaPlugin)
   await app.register(kafkaPlugin)
 
   // ── Routes ────────────────────────────────────────────────────────────────────
-  await app.register(healthRoutes, { prefix: '/api/v1' })
-  await app.register(webhookRoutes, { prefix: '/api/v1' })
+  const v1 = '/api/v1'
+  await app.register(healthRoutes, { prefix: v1 })
+  await app.register(webhookRoutes, { prefix: v1 })
+  await app.register(authRoutes, { prefix: v1 })
+  await app.register(conversationRoutes, { prefix: v1 })
 
   // ── Global error handler ──────────────────────────────────────────────────────
   app.setErrorHandler((error, req, reply) => {
