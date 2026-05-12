@@ -12,7 +12,18 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:studio": "prisma studio",
     "lint": "eslint src --ext .ts",
-    "format": "prettier --write \"src/**/*.ts\""
+    "format": "prettier --write \"src/**/*.ts\"",
+    "pm2:start": "pm2 start ecosystem.config.cjs",
+    "pm2:start:prod": "pm2 start ecosystem.config.cjs --env production",
+    "pm2:start:staging": "pm2 start ecosystem.config.cjs --env staging",
+    "pm2:reload": "pm2 reload chatterdesk",
+    "pm2:restart": "pm2 restart chatterdesk",
+    "pm2:stop": "pm2 stop chatterdesk",
+    "pm2:delete": "pm2 delete chatterdesk",
+    "pm2:logs": "pm2 logs chatterdesk",
+    "pm2:monit": "pm2 monit",
+    "pm2:save": "pm2 save",
+    "deploy": "npm run build && npm run pm2:reload"
   },
   "dependencies": {
     "@fastify/cors": "^9.0.1",
@@ -36,6 +47,7 @@
     "@typescript-eslint/eslint-plugin": "^7.13.0",
     "@typescript-eslint/parser": "^7.13.0",
     "eslint": "^8.57.0",
+    "pm2": "^7.0.1",
     "prettier": "^3.3.2",
     "prisma": "^7.8.0",
     "tsup": "^8.1.0",

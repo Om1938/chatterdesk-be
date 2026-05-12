@@ -38,6 +38,12 @@ async function main(): Promise<void> {
 
   await app.listen({ port: config.PORT, host: config.HOST })
   logger.info({ port: config.PORT, host: config.HOST }, 'Server listening')
+
+  // Signal PM2 that this instance is ready to receive traffic.
+  // Required for wait_ready: true and zero-downtime pm2 reload.
+  if (typeof process.send === 'function') {
+    process.send('ready')
+  }
 }
 
 main().catch((err) => {
