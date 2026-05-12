@@ -1,0 +1,48 @@
+{
+  "name": "chatterdesk",
+  "version": "1.0.0",
+  "description": "Enterprise WhatsApp webhook ingestion service with Fastify, Kafka, and Prisma",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsup src/server.ts --format cjs --dts --clean",
+    "start": "node dist/server.js",
+    "typecheck": "tsc --noEmit",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:studio": "prisma studio",
+    "lint": "eslint src --ext .ts",
+    "format": "prettier --write \"src/**/*.ts\""
+  },
+  "dependencies": {
+    "@fastify/cors": "^9.0.1",
+    "@fastify/helmet": "^11.1.1",
+    "@fastify/rate-limit": "^9.1.0",
+    "@fastify/sensible": "^5.5.0",
+    "@prisma/adapter-pg": "^7.8.0",
+    "@prisma/client": "^7.8.0",
+    "dotenv": "^16.4.5",
+    "fastify": "^4.27.0",
+    "fastify-plugin": "^4.5.1",
+    "kafkajs": "^2.2.4",
+    "pg": "^8.20.0",
+    "pino": "^9.2.0",
+    "pino-pretty": "^11.2.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/pg": "^8.20.0",
+    "@typescript-eslint/eslint-plugin": "^7.13.0",
+    "@typescript-eslint/parser": "^7.13.0",
+    "eslint": "^8.57.0",
+    "prettier": "^3.3.2",
+    "prisma": "^7.8.0",
+    "tsup": "^8.1.0",
+    "tsx": "^4.15.2",
+    "typescript": "^5.4.5"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

@@ -1,0 +1,84 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model WebhookEvent {
+  id             String    @id @default(uuid())
+  source         String    @db.VarChar(64)
+  topic          String    @db.VarChar(128)
+  rawPayload     String    @db.Text
+  processingError String?  @db.Text
+  receivedAt     DateTime  @default(now())
+  processedAt    DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@index([source, receivedAt(sort: Desc)])
+  @@index([topic, receivedAt(sort: Desc)])
+  @@index([processedAt])
+  @@map("webhook_events")
+}
+
+model WhatsAppContact {
+  id          String    @id @default(uuid())
+  waId        String    @unique @db.VarChar(32)
+  profileName String?   @db.VarChar(256)
+  phoneNumber String?   @db.VarChar(32)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  messages    WhatsAppMessage[]
+
+  @@index([waId])
+  @@map("whatsapp_contacts")
+}
+
+model WhatsAppMessage {
+  id            String   @id @default(uuid())
+  waMessageId   String   @unique @db.VarChar(128)
+  waId          String   @db.VarChar(32)
+  direction     Direction
+  messageType   String   @db.VarChar(32)
+  content       Json
+  timestamp     DateTime
+  status        MessageStatus @default(RECEIVED)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  contact       WhatsAppContact? @relation(fields: [waId], references: [waId])
+
+  @@index([waId, timestamp(sort: Desc)])
+  @@index([status])
+  @@map("whatsapp_messages")
+}
+
+model WhatsAppStatusUpdate {
+  id            String   @id @default(uuid())
+  waMessageId   String   @db.VarChar(128)
+  recipientId   String   @db.VarChar(32)
+  status        String   @db.VarChar(32)
+  timestamp     DateTime
+  errorCode     Int?
+  errorTitle    String?  @db.VarChar(256)
+  createdAt     DateTime @default(now())
+
+  @@index([waMessageId])
+  @@index([recipientId, timestamp(sort: Desc)])
+  @@map("whatsapp_status_updates")
+}
+
+enum Direction {
+  INBOUND
+  OUTBOUND
+}
+
+enum MessageStatus {
+  RECEIVED
+  QUEUED
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
