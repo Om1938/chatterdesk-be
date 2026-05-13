@@ -5,13 +5,17 @@ export async function healthRoutes(fastify: FastifyInstance): Promise<void> {
     '/health',
     {
       schema: {
+        tags: ['Health'],
+        summary: 'Liveness probe',
+        description: 'Returns 200 if the server process is alive.',
+        security: [],
         response: {
           200: {
             type: 'object',
             properties: {
-              status: { type: 'string' },
+              status: { type: 'string', example: 'ok' },
               uptime: { type: 'number' },
-              timestamp: { type: 'string' },
+              timestamp: { type: 'string', format: 'date-time' },
             },
           },
         },
@@ -28,7 +32,30 @@ export async function healthRoutes(fastify: FastifyInstance): Promise<void> {
 
   fastify.get(
     '/health/ready',
-    {},
+    {
+      schema: {
+        tags: ['Health'],
+        summary: 'Readiness probe',
+        description: 'Returns 200 if the database connection is healthy.',
+        security: [],
+        response: {
+          200: {
+            type: 'object',
+            properties: {
+              status: { type: 'string', example: 'ready' },
+              db: { type: 'string', example: 'ok' },
+            },
+          },
+          503: {
+            type: 'object',
+            properties: {
+              status: { type: 'string', example: 'not_ready' },
+              db: { type: 'string', example: 'error' },
+            },
+          },
+        },
+      },
+    },
     async (_req, reply) => {
       try {
         await fastify.prisma.$queryRaw`SELECT 1`

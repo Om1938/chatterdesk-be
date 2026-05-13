@@ -10,6 +10,7 @@ import cookiePlugin from './plugins/cookie.js'
 import jwtPlugin from './plugins/jwt.js'
 import prismaPlugin from './plugins/prisma.js'
 import kafkaPlugin from './plugins/kafka.js'
+import swaggerPlugin from './plugins/swagger.js'
 
 import { healthRoutes } from './modules/health/health.routes.js'
 import { webhookRoutes } from './modules/webhook/webhook.routes.js'
@@ -53,7 +54,8 @@ export async function buildApp() {
     },
   })
 
-  // ── Plugins (order matters: cookie → jwt → prisma → kafka) ───────────────────
+  // ── Plugins (order matters: swagger first, then cookie → jwt → prisma → kafka) ─
+  await app.register(swaggerPlugin)
   await app.register(sensiblePlugin)
   await app.register(cookiePlugin)
   await app.register(jwtPlugin)
