@@ -6,4 +6,4 @@ async function cookiePlugin(fastify: FastifyInstance): Promise<void> {
   await fastify.register(cookie)
 }
 
-export default fp(cookiePlugin, { name: 'cookie', fastify: '4.x' })
+export default fp(cookiePlugin, { name: 'cookie', fastify: '5.x' })

@@ -19,7 +19,7 @@ async function jwtPlugin(fastify: FastifyInstance): Promise<void> {
 
 export default fp(jwtPlugin, {
   name: 'jwt',
-  fastify: '4.x',
+  fastify: '5.x',
   // cookie plugin must be registered first
   dependencies: ['cookie'],
 })

@@ -8,5 +8,5 @@ async function sensiblePlugin(fastify: FastifyInstance): Promise<void> {
 
 export default fp(sensiblePlugin, {
   name: 'sensible',
-  fastify: '4.x',
+  fastify: '5.x',
 })

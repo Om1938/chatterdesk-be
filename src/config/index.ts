@@ -25,7 +25,7 @@ const envSchema = z.object({
   KAFKA_SSL: z
     .string()
     .transform((v) => v === 'true')
-    .default('false'),
+    .default(false),
   KAFKA_SASL_MECHANISM: z
     .string()
     .optional()

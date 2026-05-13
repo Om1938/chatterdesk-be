@@ -42,5 +42,5 @@ async function prismaPlugin(fastify: FastifyInstance): Promise<void> {
 
 export default fp(prismaPlugin, {
   name: 'prisma',
-  fastify: '4.x',
+  fastify: '5.x',
 })

@@ -19,5 +19,5 @@ async function kafkaPlugin(fastify: FastifyInstance): Promise<void> {
 
 export default fp(kafkaPlugin, {
   name: 'kafka',
-  fastify: '4.x',
+  fastify: '5.x',
 })

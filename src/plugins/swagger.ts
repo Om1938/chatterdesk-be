@@ -78,5 +78,5 @@ async function swaggerPlugin(fastify: FastifyInstance): Promise<void> {
 
 export default fp(swaggerPlugin, {
   name: 'swagger',
-  fastify: '4.x',
+  fastify: '5.x',
 })
