@@ -1,4 +1,4 @@
-import Fastify from 'fastify'
+import Fastify, { type FastifyError } from 'fastify'
 import cors from '@fastify/cors'
 import helmet from '@fastify/helmet'
 import rateLimit from '@fastify/rate-limit'
@@ -18,7 +18,7 @@ import { authRoutes } from './modules/auth/auth.routes.js'
 import { conversationRoutes } from './modules/conversations/conversation.routes.js'
 
 export async function buildApp() {
-  const app = Fastify({ logger, trustProxy: true })
+  const app = Fastify({ loggerInstance: logger, trustProxy: true })
 
   // Capture raw body buffer for HMAC signature verification
   app.addContentTypeParser(
@@ -70,7 +70,7 @@ export async function buildApp() {
   await app.register(conversationRoutes, { prefix: v1 })
 
   // ── Global error handler ──────────────────────────────────────────────────────
-  app.setErrorHandler((error, req, reply) => {
+  app.setErrorHandler((error: FastifyError, req, reply) => {
     req.log.error({ err: error, url: req.url, method: req.method }, 'Unhandled error')
     const statusCode = error.statusCode ?? 500
     return reply.status(statusCode).send({
